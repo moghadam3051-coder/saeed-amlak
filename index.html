@@ -399,14 +399,11 @@ body.light .adv-toggle{background:#f6f9fc}
 </dialog>
 <div id="printArea"></div>
 
-<!-- ================================================== -->
 <!-- ⚠️ کدهای Firebase (اینجا را با دقت پر کنید) ⚠️ -->
-<!-- ================================================== -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <script>
-// ⚠️ این بخش را با کدهای پروژه خود در Firebase جایگزین کنید ⚠️
 const firebaseConfig = {
   apiKey: "اینجا_API_KEY_خود_را_بگذارید",
   authDomain: "اینجا_authDomain_خود_را_بگذارید",
@@ -416,7 +413,7 @@ const firebaseConfig = {
   appId: "اینجا_appId_خود_را_بگذارید"
 };
 
-firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
 const dbCloud = firebase.firestore();
 
 let appSettings = JSON.parse(localStorage.getItem('appSettings')) || { name: "املاک سعید", phone: "09141182129", address: "تبریز، شهرک اندیشه" };
@@ -427,12 +424,9 @@ let items=[], demands=[], contacts=[];
 let dealFilter='همه', typeFilter='همه', archiveFilter='archive';
 let detailPhotos=[], detailIndex=0, currentTab='prop';
 let currentVideoBase64=null;
-let isAutoBackup = true; 
-let backupDirHandle = null;
 const $=id=>document.getElementById(id);
 let mediaRecorder, audioChunks=[], recordedAudioBase64=null, isRecording=false;
 let isSpeaking=false;
-let touchStartX=0, touchEndX=0;
 
 function applyTheme(){
   if(currentTheme === 'light') document.body.classList.add('light');
@@ -445,23 +439,18 @@ function toggleTheme(){
   applyTheme();
 }
 
-// ============ توابع دیتابیس ابری (Firebase) ============
 async function load(){
   try{
     const pSnap = await dbCloud.collection('properties').get();
     items = pSnap.docs.map(doc => doc.data());
-
     const dSnap = await dbCloud.collection('demands').get();
     demands = dSnap.docs.map(doc => doc.data());
-
     const cSnap = await dbCloud.collection('contacts').get();
     contacts = cSnap.docs.map(doc => doc.data());
-
     render();
     loadSettingsUI();
   }catch(e){
     console.error(e);
-    alert('خطا در اتصال به سرور. لطفاً اینترنت خود را بررسی کنید.');
   }
 }
 
@@ -470,7 +459,7 @@ async function put(storeName, item){
     await dbCloud.collection(storeName).doc(item.id).set(item);
   } catch(e) {
     console.error("خطا در ذخیره: ", e);
-    alert("خطا در ذخیره در فضای ابری!\nاحتمالاً حجم عکس‌ها یا ویدیوهای این فایل بیش از حد مجاز است.");
+    alert("خطا در ذخیره در فضای ابری!");
   }
 }
 
@@ -496,26 +485,16 @@ async function delItem(storeName, id, force=false){
   }
 }
 
-// ============ توابع کمکی ============
-function formatNumberInput(input){
-  let val=input.value.replace(/[^\d]/g,'');
-  if(val) input.value=Number(val).toLocaleString('en-US'); else input.value='';
-}
+function formatNumberInput(input){ let val=input.value.replace(/[^\d]/g,''); if(val) input.value=Number(val).toLocaleString('en-US'); else input.value=''; }
 function money(v){if(!v)return '';let n=Number(String(v).replace(/[^\d]/g,''));return n?n.toLocaleString('en-US')+' تومان':''}
 function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function getPhotos(x){const arr=[...(x.photos||[])]; if(x.photo && !arr.includes(x.photo)) arr.unshift(x.photo); return arr;}
 function num(v){return Number(String(v||'').replace(/[^\d]/g,''))||0;}
-function localDateKey(date=new Date()){
-  const y=date.getFullYear(), m=String(date.getMonth()+1).padStart(2,'0'), d=String(date.getDate()).padStart(2,'0');
-  return `${y}-${m}-${d}`;
-}
+function localDateKey(date=new Date()){ const y=date.getFullYear(), m=String(date.getMonth()+1).padStart(2,'0'), d=String(date.getDate()).padStart(2,'0'); return `${y}-${m}-${d}`; }
 
 function switchTab(tab){
   currentTab=tab;
-  ['Prop','Demand','Archive','Contacts'].forEach(t=>{
-    let el=$('tab'+t);
-    if(el) el.classList.toggle('active', t.toLowerCase()===tab);
-  });
+  ['Prop','Demand','Archive','Contacts'].forEach(t=>{ let el=$('tab'+t); if(el) el.classList.toggle('active', t.toLowerCase()===tab); });
   $('filterProps').style.display=(tab==='prop'||tab==='archive')?'block':'none';
   $('archiveSubTabs').style.display=(tab==='archive')?'flex':'none';
   const f=$('mainFab');
@@ -526,35 +505,19 @@ function switchTab(tab){
   $('search').value='';
   render();
 }
-function openCurrentForm(){
-  if(currentTab==='prop') openForm();
-  else if(currentTab==='demand') openDemandForm();
-  else if(currentTab==='contacts') openContactForm();
-}
+function openCurrentForm(){ if(currentTab==='prop') openForm(); else if(currentTab==='demand') openDemandForm(); else if(currentTab==='contacts') openContactForm(); }
 function setDeal(b){dealFilter=b.dataset.deal;document.querySelectorAll('#dealTabs button').forEach(x=>x.classList.toggle('active',x===b));if(b.dataset.deal!=='⭐') isFavFilter=false;render()}
 function toggleFavFilter(b){isFavFilter=!isFavFilter;b.classList.toggle('active',isFavFilter);render()}
 function setType(b){typeFilter=b.dataset.type;document.querySelectorAll('#typeTabs button').forEach(x=>x.classList.toggle('active',x===b));render()}
 function setArchiveFilter(b){archiveFilter=b.dataset.arch;document.querySelectorAll('#archiveSubTabs button').forEach(x=>x.classList.toggle('active',x===b));render()}
-function toggleAdvPanel(){
-  const p=$('advPanel');
-  p.classList.toggle('open');
-  $('advArrow').textContent=p.classList.contains('open')?'▲':'▼';
-}
-function resetAdvFilter(){
-  ['f_minArea','f_maxArea','f_minPrice','f_maxPrice','f_rooms'].forEach(id=>$(id).value='');
-  $('f_status').value='';
-  render();
-}
+function toggleAdvPanel(){ const p=$('advPanel'); p.classList.toggle('open'); $('advArrow').textContent=p.classList.contains('open')?'▲':'▼'; }
+function resetAdvFilter(){ ['f_minArea','f_maxArea','f_minPrice','f_maxPrice','f_rooms'].forEach(id=>$(id).value=''); $('f_status').value=''; render(); }
 
 function isMatch(p,d){
   if(p.deal!==d.deal || p.type!==d.type) return false;
   if(d.area && num(p.area)<num(d.area)) return false;
-  if(p.deal==='رهن و اجاره'){
-    if(d.maxDeposit && num(p.deposit)>num(d.maxDeposit)) return false;
-    if(d.maxRent && num(p.rent)>num(d.maxRent)) return false;
-  } else {
-    if(d.maxPrice && num(p.price)>num(d.maxPrice)) return false;
-  }
+  if(p.deal==='رهن و اجاره'){ if(d.maxDeposit && num(p.deposit)>num(d.maxDeposit)) return false; if(d.maxRent && num(p.rent)>num(d.maxRent)) return false; }
+  else { if(d.maxPrice && num(p.price)>num(d.maxPrice)) return false; }
   return true;
 }
 function getMatchesForProp(p){return demands.filter(d=>!d.isDeleted && isMatch(p,d));}
@@ -563,8 +526,7 @@ function getMatchesForDemand(d){return items.filter(p=>!p.isDeleted && isMatch(p
 function renderStats(){
   const activeProps = items.filter(x=>!x.isDeleted && x.archived!==true).length;
   const activeDemands = demands.filter(x=>!x.isDeleted).length;
-  let matchCount=0;
-  items.forEach(p=>{ if(!p.isDeleted && p.archived!==true){ matchCount += getMatchesForProp(p).length; }});
+  let matchCount=0; items.forEach(p=>{ if(!p.isDeleted && p.archived!==true){ matchCount += getMatchesForProp(p).length; }});
   const today = localDateKey();
   const dueFollowUps = demands.filter(d=>!d.isDeleted && d.followUp && d.followUp<=today).length;
   $('statsBar').innerHTML = `
@@ -574,10 +536,8 @@ function renderStats(){
     <div class="stat ${dueFollowUps>0?'danger':'warn'}" onclick="switchTab('demand')"><b>${dueFollowUps}</b><small>⏰ پیگیری</small></div>
   `;
 }
-
-function sortArray(arr, key){
-  const sortBy = $('sortBy').value;
-  const s = [...arr];
+function sortArray(arr){
+  const sortBy = $('sortBy').value; const s = [...arr];
   switch(sortBy){
     case 'price_asc': return s.sort((a,b)=>(num(a.price)||num(a.deposit)) - (num(b.price)||num(b.deposit)));
     case 'price_desc': return s.sort((a,b)=>(num(b.price)||num(b.deposit)) - (num(a.price)||num(a.deposit)));
@@ -593,41 +553,25 @@ function render(){
   if(currentTab==='prop' || currentTab==='archive'){
     renderStats();
     const isArchiveTab = currentTab==='archive';
-    const fMinArea = num($('f_minArea').value);
-    const fMaxArea = num($('f_maxArea').value);
-    const fMinPrice = num($('f_minPrice').value);
-    const fMaxPrice = num($('f_maxPrice').value);
-    const fRooms = num($('f_rooms').value);
-    const fStatus = $('f_status').value;
+    const fMinArea = num($('f_minArea').value), fMaxArea = num($('f_maxArea').value), fMinPrice = num($('f_minPrice').value), fMaxPrice = num($('f_maxPrice').value), fRooms = num($('f_rooms').value), fStatus = $('f_status').value;
     let arr=items.filter(x=>{
       let stateOk=false;
-      if(isArchiveTab){
-        if(archiveFilter==='archive') stateOk = x.archived===true && x.isDeleted!==true;
-        else stateOk = x.isDeleted===true;
-      } else {
-        stateOk = x.archived!==true && x.isDeleted!==true;
-      }
+      if(isArchiveTab){ if(archiveFilter==='archive') stateOk = x.archived===true && x.isDeleted!==true; else stateOk = x.isDeleted===true; }
+      else { stateOk = x.archived!==true && x.isDeleted!==true; }
       const matchDeal = dealFilter==='همه' || dealFilter==='⭐' || x.deal===dealFilter;
       const matchType = typeFilter==='همه' || x.type===typeFilter;
       const matchSearch = !q || [x.title,x.address,x.phone,x.owner,x.consultantName,x.id].join(' ').toLowerCase().includes(q);
       const matchFav = !isFavFilter || favorites.includes(x.id);
-      const mMinArea = !fMinArea || num(x.area) >= fMinArea;
-      const mMaxArea = !fMaxArea || num(x.area) <= fMaxArea;
-      const mMinPrice = !fMinPrice || num(x.price||x.deposit) >= fMinPrice;
-      const mMaxPrice = !fMaxPrice || num(x.price||x.deposit) <= fMaxPrice;
+      const mMinArea = !fMinArea || num(x.area) >= fMinArea, mMaxArea = !fMaxArea || num(x.area) <= fMaxArea;
+      const mMinPrice = !fMinPrice || num(x.price||x.deposit) >= fMinPrice, mMaxPrice = !fMaxPrice || num(x.price||x.deposit) <= fMaxPrice;
       const mRooms = !fRooms || num(x.rooms) === fRooms;
       const mStatus = !fStatus || (fStatus==='coop' && x.isCoop==='true') || (fStatus==='exchange' && x.isExchange) || (fStatus==='solo' && x.isCoop!=='true');
       return stateOk && matchDeal && matchType && matchSearch && matchFav && mMinArea && mMaxArea && mMinPrice && mMaxPrice && mRooms && mStatus;
     });
     arr = sortArray(arr);
     html = arr.length?arr.map(x=>{
-      const photos=getPhotos(x);
-      const thumb=photos[0]||'';
-      const matches = getMatchesForProp(x);
-      const hasMatch = matches.length>0;
-      const isCoop = x.isCoop==='true' || x.isCoop===true;
-      const hasExchange = x.isExchange===true || x.isExchange==='true';
-      const isFav = favorites.includes(x.id);
+      const photos=getPhotos(x), thumb=photos[0]||'', matches = getMatchesForProp(x), hasMatch = matches.length>0;
+      const isCoop = x.isCoop==='true' || x.isCoop===true, hasExchange = x.isExchange===true || x.isExchange==='true', isFav = favorites.includes(x.id);
       let dealClass='',badgeClass='',dealIcon='';
       if(x.deal==='فروش'){dealClass='card-sale';badgeClass='badge-sale';dealIcon='🏷️';}
       else if(x.deal==='رهن و اجاره'){dealClass='card-rent';badgeClass='badge-rent';dealIcon='🔑';}
@@ -636,59 +580,39 @@ function render(){
       else {dealClass='card-partner';badgeClass='badge-partner';dealIcon='🤝';}
       return `
       <article class="card ${dealClass}" onclick="openDetail('${x.id}')">
-        <button class="star-btn ${isFav?'active':''}" onclick="event.stopPropagation();toggleFav('${x.id}')" title="علاقه‌مندی">${isFav?'★':'☆'}</button>
-        ${hasMatch?`<div class="match-badge" title="${matches.length} خواهان منطبق">🎯${matches.length}</div>`:''}
+        <button class="star-btn ${isFav?'active':''}" onclick="event.stopPropagation();toggleFav('${x.id}')">${isFav?'★':'☆'}</button>
+        ${hasMatch?`<div class="match-badge">🎯${matches.length}</div>`:''}
         <img class="thumb" src="${thumb}" onerror="this.style.visibility='hidden'">
         <div class="info">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-             <b>${esc(x.title||x.type)}</b>
-             <span class="code-label">کد: ${x.id.replace('P','')}</span>
+             <b>${esc(x.title||x.type)}</b><span class="code-label">کد: ${x.id.replace('P','')}</span>
           </div>
           ${photos.length?`<span class="badge" style="background:#223955;color:var(--accent);">🖼 ${photos.length}</span>`:''}
-          ${isCoop?`<span class="badge badge-coop">🤝 همکاری</span>`:''}
-          ${hasExchange?`<span class="badge badge-exchange">🔄 تهاتر</span>`:''}
-          <div class="muted"><span class="badge ${badgeClass}">${dealIcon} ${esc(x.deal)}</span> · ${esc(x.type)} · ${esc(x.address||'بدون آدرس')}</div>
-          <div class="price">${(x.deal==='رهن و اجاره')
-            ? ('رهن '+(money(x.deposit)||'توافقی')+' · اجاره '+(money(x.rent)||'توافقی'))
-            : ((x.pricePerMeter?('هر متر '+money(x.pricePerMeter)+' · '):'')+'کل '+(money(x.price)||'ثبت نشده'))}</div>
+          ${isCoop?`<span class="badge badge-coop">🤝 همکاری</span>`:''}${hasExchange?`<span class="badge badge-exchange">🔄 تهاتر</span>`:''}
+          <div class="muted"><span class="badge ${badgeClass}">${dealIcon} ${esc(x.deal)}</span> · ${esc(x.type)} · ${esc(x.address||'')}</div>
+          <div class="price">${(x.deal==='رهن و اجاره')? ('رهن '+(money(x.deposit)||'توافقی')+' · اجاره '+(money(x.rent)||'توافقی')): ((x.pricePerMeter?('هر متر '+money(x.pricePerMeter)+' · '):'')+'کل '+(money(x.price)||'ثبت نشده'))}</div>
           <div class="actions" onclick="event.stopPropagation()">
-            ${archiveFilter==='trash' && isArchiveTab
-              ? `<button onclick="delItem('properties','${x.id}',true)" style="background:var(--red);color:white;border-color:var(--red);">❌ حذف همیشگی</button>
-                 <button onclick="restoreItem('${x.id}')" style="background:var(--green);color:#10213b;border-color:var(--green);">♻️ بازیابی</button>`
-              : (isArchiveTab
-                  ? `<button onclick="restoreItem('${x.id}')" style="background:var(--green);color:#10213b;border-color:var(--green);">♻️ بازگردانی</button>`
-                  : `<button onclick="archiveItem('${x.id}')" style="background:#f39c1222;color:var(--coop);border-color:var(--coop);">📦 بایگانی</button>`
-                )
-            }
-            <button onclick="edit('${x.id}')">ویرایش</button>
-            ${!isArchiveTab?`<button onclick="delItem('properties','${x.id}',false)">🗑️ حذف</button>`:''}
+            ${archiveFilter==='trash' && isArchiveTab ? `<button onclick="delItem('properties','${x.id}',true)" style="background:var(--red);color:white;">❌ حذف همیشگی</button><button onclick="restoreItem('${x.id}')" style="background:var(--green);color:#10213b;">♻️ بازیابی</button>` : (isArchiveTab ? `<button onclick="restoreItem('${x.id}')" style="background:var(--green);color:#10213b;">♻️ بازگردانی</button>` : `<button onclick="archiveItem('${x.id}')" style="background:#f39c1222;color:var(--coop);">📦 بایگانی</button>`)}
+            <button onclick="edit('${x.id}')">ویرایش</button>${!isArchiveTab?`<button onclick="delItem('properties','${x.id}',false)">🗑️ حذف</button>`:''}
           </div>
         </div>
       </article>`;
-    }).join('') : `<div class="empty">${isArchiveTab?(archiveFilter==='trash'?'سطل زباله خالی است.':'بایگانی خالی است.'):'هنوز فایلی با این فیلترها یافت نشد.'}</div>`;
+    }).join('') : `<div class="empty">${isArchiveTab?(archiveFilter==='trash'?'سطل زباله خالی است.':'بایگانی خالی است.'):'هنوز فایلی یافت نشد.'}</div>`;
   }
   else if(currentTab==='demand'){
     const today = localDateKey();
     let arr=demands.filter(x=>!x.isDeleted && (!q||[x.name,x.phone,x.id].join(' ').toLowerCase().includes(q)));
     html = arr.length?arr.sort((a,b)=>b.updated-a.updated).map(x=>{
-      const matches = getMatchesForDemand(x);
-      const hasMatch = matches.length>0;
-      const isDue = x.followUp && x.followUp <= today;
-      const fDate = x.followUp ? new Date(x.followUp).toLocaleDateString('fa-IR') : '';
+      const matches = getMatchesForDemand(x), hasMatch = matches.length>0, isDue = x.followUp && x.followUp <= today, fDate = x.followUp ? new Date(x.followUp).toLocaleDateString('fa-IR') : '';
       return `
       <article class="card" onclick="openDemandDetail('${x.id}')">
-        ${hasMatch?`<div class="match-badge" title="${matches.length} ملک منطبق">🎯${matches.length}</div>`:''}
+        ${hasMatch?`<div class="match-badge">🎯${matches.length}</div>`:''}
         <div class="info">
-          <b>👤 ${esc(x.name)}</b>
-          ${isDue?`<span class="reminder-badge">⏰ پیگیری: ${fDate}</span>`:''}
+          <b>👤 ${esc(x.name)}</b>${isDue?`<span class="reminder-badge">⏰ پیگیری: ${fDate}</span>`:''}
           <div class="muted">${esc(x.type)} · ${esc(x.deal)}</div>
           <div class="price">${x.deal==='رهن و اجاره'?('رهن تا '+(money(x.maxDeposit)||'توافقی')+' · اجاره تا '+(money(x.maxRent)||'توافقی')):('بودجه تا '+(money(x.maxPrice)||'نامشخص'))}</div>
           <div class="muted">📞 ${esc(x.phone)}</div>
-          <div class="actions" onclick="event.stopPropagation()">
-            <button onclick="editDemand('${x.id}')">ویرایش</button>
-            <button onclick="callPhone('${x.phone||''}')">تماس</button>
-            <button onclick="delItem('demands','${x.id}',false)">🗑️ حذف</button>
-          </div>
+          <div class="actions" onclick="event.stopPropagation()"><button onclick="editDemand('${x.id}')">ویرایش</button><button onclick="callPhone('${x.phone||''}')">تماس</button><button onclick="delItem('demands','${x.id}',false)">🗑️ حذف</button></div>
         </div>
       </article>`;
     }).join('') : '<div class="empty">هنوز درخواستی ثبت نشده است.</div>';
@@ -698,293 +622,127 @@ function render(){
     html = arr.length?arr.sort((a,b)=>b.updated-a.updated).map(x=>`
       <article class="card card-contact" onclick="editContact('${x.id}')">
         <div class="info">
-          <b>👤 ${esc(x.name)}</b>
-          <span class="badge" style="background:#223955;color:var(--accent);">${esc(x.role)}</span>
-          <div class="price" style="margin-top:8px;">📞 ${esc(x.phone)}</div>
-          ${x.notes?`<div class="muted">${esc(x.notes)}</div>`:''}
-          <div class="actions" onclick="event.stopPropagation()">
-            <button onclick="callPhone('${x.phone||''}')" class="primary" style="background:var(--green);color:#10213b;border-color:var(--green);">📞 تماس</button>
-            <button onclick="editContact('${x.id}')">ویرایش</button>
-            <button onclick="delItem('contacts','${x.id}',false)" style="background:#e15b5b22;color:var(--red);border-color:var(--red);">حذف</button>
-          </div>
+          <b>👤 ${esc(x.name)}</b><span class="badge" style="background:#223955;color:var(--accent);">${esc(x.role)}</span>
+          <div class="price" style="margin-top:8px;">📞 ${esc(x.phone)}</div>${x.notes?`<div class="muted">${esc(x.notes)}</div>`:''}
+          <div class="actions" onclick="event.stopPropagation()"><button onclick="callPhone('${x.phone||''}')" class="primary" style="background:var(--green);color:#10213b;">📞 تماس</button><button onclick="editContact('${x.id}')">ویرایش</button><button onclick="delItem('contacts','${x.id}',false)" style="background:#e15b5b22;color:var(--red);">حذف</button></div>
         </div>
       </article>`).join('') : '<div class="empty">هنوز مخاطبی ثبت نشده است.</div>';
   }
   $('list').innerHTML = html;
 }
 
-function toggleFav(id){
-  if(favorites.includes(id)) favorites = favorites.filter(x=>x!==id);
-  else favorites.push(id);
-  localStorage.setItem('favorites', JSON.stringify(favorites));
-  render();
-}
-
-async function archiveItem(id){
-  const x=items.find(i=>i.id===id); if(!x) return;
-  x.archived=true; x.updated=Date.now();
-  await put('properties', x); render();
-}
-async function restoreItem(id){
-  const x=items.find(i=>i.id===id); if(!x) return;
-  x.archived=false; x.isDeleted=false; x.updated=Date.now();
-  await put('properties', x); render();
-}
-
+function toggleFav(id){ if(favorites.includes(id)) favorites = favorites.filter(x=>x!==id); else favorites.push(id); localStorage.setItem('favorites', JSON.stringify(favorites)); render(); }
+async function archiveItem(id){ const x=items.find(i=>i.id===id); if(!x) return; x.archived=true; x.updated=Date.now(); await put('properties', x); render(); }
+async function restoreItem(id){ const x=items.find(i=>i.id===id); if(!x) return; x.archived=false; x.isDeleted=false; x.updated=Date.now(); await put('properties', x); render(); }
 function openLightbox(src){$('lightboxImg').src=src;$('lightbox').showModal();}
 
 function shareProperty(x){
   let text=`🏠 ${appSettings.name}\n━━━━━━━━━━━━━━\nکد فایل: ${x.id.replace('P','')}\nعنوان: ${x.title||x.type}\nنوع معامله: ${x.deal}\n`;
-  if(x.area) text+=`متراژ: ${x.area} متر\n`;
-  if(x.price) text+=`قیمت: ${Number(x.price).toLocaleString('fa-IR')} تومان\n`;
+  if(x.area) text+=`متراژ: ${x.area} متر\n`; if(x.price) text+=`قیمت: ${Number(x.price).toLocaleString('fa-IR')} تومان\n`;
   text+=`━━━━━━━━━━━━━━\n📍 ${appSettings.address}\n📞 ${appSettings.phone}\n`;
-  if(navigator.share){navigator.share({title:x.title||'فایل',text}).catch(()=>{});}
-  else{navigator.clipboard.writeText(text).then(()=>alert('متن کپی شد.')).catch(()=>alert('امکان اشتراک نیست.'));}
+  if(navigator.share){navigator.share({title:x.title||'فایل',text}).catch(()=>{});} else{navigator.clipboard.writeText(text).then(()=>alert('متن کپی شد.')).catch(()=>alert('امکان اشتراک نیست.'));}
 }
-
 function toggleSpeech(x){
-  const btn=$('dSpeakBtn');
-  if(!('speechSynthesis' in window)) return alert('مرورگر TTS را پشتیبانی نمی‌کند.');
+  const btn=$('dSpeakBtn'); if(!('speechSynthesis' in window)) return alert('مرورگر TTS را پشتیبانی نمی‌کند.');
   if(isSpeaking){window.speechSynthesis.cancel();isSpeaking=false;btn.textContent='🔊 خواندن';return;}
-  let text=`کد ${x.id.replace('P','')}. ${x.title||x.type}. ${x.deal}. ${x.type}. `;
-  if(x.area) text+=`${x.area} متر. `;
-  if(x.notes) text+=x.notes;
-  window.speechSynthesis.cancel();
-  let u=new SpeechSynthesisUtterance(text);
-  u.lang='fa-IR'; u.rate=0.9;
-  u.onend=()=>{isSpeaking=false;btn.textContent='🔊 خواندن';};
-  u.onerror=()=>{isSpeaking=false;btn.textContent='🔊 خواندن';};
+  let text=`کد ${x.id.replace('P','')}. ${x.title||x.type}. ${x.deal}. ${x.type}. `; if(x.area) text+=`${x.area} متر. `; if(x.notes) text+=x.notes;
+  window.speechSynthesis.cancel(); let u=new SpeechSynthesisUtterance(text); u.lang='fa-IR'; u.rate=0.9;
+  u.onend=()=>{isSpeaking=false;btn.textContent='🔊 خواندن';}; u.onerror=()=>{isSpeaking=false;btn.textContent='🔊 خواندن';};
   window.speechSynthesis.speak(u); isSpeaking=true; btn.textContent='⏹ توقف';
 }
-
 async function quickSaveContact(name,phone,role){
   if(!name && !phone) return alert('نام و شماره خالی است.');
   const c={id:'C'+Date.now().toString().slice(-8),name:name||'بدون نام',phone:phone||'',role:role||'سایر',notes:'',created:Date.now(),updated:Date.now()};
-  await put('contacts',c); contacts.push(c);
-  alert(`«${name}» در دفترچه برنامه ذخیره شد.`);
+  await put('contacts',c); contacts.push(c); alert(`«${name}» ذخیره شد.`);
 }
 
 function openDetail(id){
-  const x=items.find(i=>i.id===id); if(!x) return;
-  if(isSpeaking){window.speechSynthesis.cancel();isSpeaking=false;}
-  detailPhotos=getPhotos(x); detailIndex=0;
-  $('dTitle').textContent=(x.title||x.type)+' (کد: '+x.id.replace('P','')+')';
-  renderSlider();
-  const dDate=x.created?new Date(x.created).toLocaleDateString('fa-IR'):'نامشخص';
-  const isCoop=x.isCoop==='true'||x.isCoop===true;
-  const matches=getMatchesForProp(x);
-  const rows=[
-    ['کد فایل',x.id.replace('P',''),false],['تاریخ ثبت',dDate,false],['نوع معامله',esc(x.deal),false],['نوع ملک',esc(x.type),false],
-    x.area?['متراژ',esc(x.area)+' متر',false]:null, x.rooms?['اتاق',esc(x.rooms),false]:null,
-    x.deal==='رهن و اجاره'?['رهن',money(x.deposit)||'توافقی',false]:null,
-    x.deal==='رهن و اجاره'?['اجاره',money(x.rent)||'توافقی',false]:null,
-    x.deal!=='رهن و اجاره'&&x.price?['قیمت کل',money(x.price),false]:null,
-    x.address?['آدرس',esc(x.address),true]:null, x.owner?['مالک',esc(x.owner),true]:null,
-    x.phone?['تلفن',`<button class="phone-link" onclick="callPhone('${esc(x.phone)}')">📞 ${esc(x.phone)}</button>`,false]:null,
-    isCoop?['وضعیت','🤝 همکاری با مشاور',false]:null
-  ].filter(Boolean);
+  const x=items.find(i=>i.id===id); if(!x) return; if(isSpeaking){window.speechSynthesis.cancel();isSpeaking=false;}
+  detailPhotos=getPhotos(x); detailIndex=0; $('dTitle').textContent=(x.title||x.type)+' (کد: '+x.id.replace('P','')+')'; renderSlider();
+  const isCoop=x.isCoop==='true'||x.isCoop===true, matches=getMatchesForProp(x);
+  const rows=[['کد فایل',x.id.replace('P',''),false],['نوع معامله',esc(x.deal),false],['نوع ملک',esc(x.type),false],x.area?['متراژ',esc(x.area)+' متر',false]:null,x.rooms?['اتاق',esc(x.rooms),false]:null,x.deal==='رهن و اجاره'?['رهن',money(x.deposit)||'توافقی',false]:null,x.deal==='رهن و اجاره'?['اجاره',money(x.rent)||'توافقی',false]:null,x.deal!=='رهن و اجاره'&&x.price?['قیمت کل',money(x.price),false]:null,x.address?['آدرس',esc(x.address),true]:null,x.owner?['مالک',esc(x.owner),true]:null,x.phone?['تلفن',`<button class="phone-link" onclick="callPhone('${esc(x.phone)}')">📞 ${esc(x.phone)}</button>`,false]:null,isCoop?['وضعیت','🤝 همکاری با مشاور',false]:null].filter(Boolean);
   let html=rows.map(r=>`<div class="row"><span>${r[0]}</span><span class="${r[2]?'fa':''}">${r[1]}</span></div>`).join('');
   if(x.amenities?.length){html+=`<h3>امکانات</h3><div class="tags-list">`+x.amenities.map(a=>`<span class="tag">${esc(a)}</span>`).join('')+`</div>`;}
   if(x.notes) html+=`<h3>توضیحات</h3><div class="muted" style="white-space:pre-wrap">${esc(x.notes)}</div>`;
-  if(x.audio||x.videoData){
-    html+=`<h3>چندرسانه‌ای</h3>`;
-    if(x.audio) html+=`<div style="margin-top:8px;"><audio controls src="${x.audio}" style="width:100%;height:40px;"></audio></div>`;
-    if(x.videoData) html+=`<div style="margin-top:8px;"><video controls src="${x.videoData}" style="width:100%;border-radius:12px;max-height:250px;"></video></div>`;
-  }
-  if(matches.length){
-    html+=`<h3>🎯 خواهان‌های منطبق (${matches.length})</h3>`;
-    html+=matches.map(d=>`<div class="muted" style="margin-bottom:5px;">👤 <b>${esc(d.name)}</b> - <a class="phone-link" onclick="callPhone('${esc(d.phone)}')">${esc(d.phone)}</a></div>`).join('');
-  }
-  $('dContent').innerHTML=html;
-  $('dSpeakBtn').textContent='🔊 خواندن';
-  $('dSpeakBtn').onclick=()=>toggleSpeech(x);
-  $('dShareBtn').onclick=()=>shareProperty(x);
-  $('dCallBtn').onclick=()=>callPhone(x.phone||'');
-  $('dCallBtn').style.display=x.phone?'':'none';
-  $('dSaveContactBtn').onclick=()=>quickSaveContact(x.owner,x.phone,'مالک');
-  $('dEditBtn').onclick=()=>{$('detail').close();edit(id)};
-  $('detail').showModal();
+  if(x.audio||x.videoData){ html+=`<h3>چندرسانه‌ای</h3>`; if(x.audio) html+=`<div style="margin-top:8px;"><audio controls src="${x.audio}" style="width:100%;height:40px;"></audio></div>`; if(x.videoData) html+=`<div style="margin-top:8px;"><video controls src="${x.videoData}" style="width:100%;border-radius:12px;max-height:250px;"></video></div>`; }
+  if(matches.length){ html+=`<h3>🎯 خواهان‌های منطبق (${matches.length})</h3>`; html+=matches.map(d=>`<div class="muted" style="margin-bottom:5px;">👤 <b>${esc(d.name)}</b> - <a class="phone-link" onclick="callPhone('${esc(d.phone)}')">${esc(d.phone)}</a></div>`).join(''); }
+  $('dContent').innerHTML=html; $('dSpeakBtn').textContent='🔊 خواندن'; $('dSpeakBtn').onclick=()=>toggleSpeech(x); $('dShareBtn').onclick=()=>shareProperty(x); $('dCallBtn').onclick=()=>callPhone(x.phone||''); $('dCallBtn').style.display=x.phone?'':'none'; $('dSaveContactBtn').onclick=()=>quickSaveContact(x.owner,x.phone,'مالک'); $('dEditBtn').onclick=()=>{$('detail').close();edit(id)}; $('detail').showModal();
 }
 
-function printProperty(x){
-  const rows=[['کد فایل', x.id.replace('P','')],['عنوان', x.title||x.type],['نوع معامله', x.deal],['نوع ملک', x.type]];
-  if(x.area) rows.push(['متراژ', x.area+' متر']);
-  if(x.price) rows.push(['قیمت', money(x.price)]);
-  if(x.address) rows.push(['آدرس', x.address]);
-  if(x.phone) rows.push(['تلفن', x.phone]);
-  const html=`<h1>🏠 ${appSettings.name}</h1><table>${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('')}</table>`;
-  $('printArea').innerHTML=html; window.print();
-}
-
-function exportCSV(type){
-  let data=[], headers=[];
-  if(type==='properties'){
-    headers=['کد','عنوان','نوع معامله','نوع ملک','متراژ','قیمت','آدرس','مالک','تلفن'];
-    data=items.filter(x=>!x.isDeleted && x.archived!==true).map(x=>[x.id.replace('P',''), x.title||'', x.deal||'', x.type||'', x.area||'', x.price||'', x.address||'', x.owner||'', x.phone||'']);
-  } else {
-    headers=['نام','تلفن','نوع معامله','نوع ملک','متراژ','بودجه'];
-    data=demands.filter(x=>!x.isDeleted).map(x=>[x.name||'', x.phone||'', x.deal||'', x.type||'', x.area||'', x.maxPrice||'']);
-  }
-  const csv = '\ufeff' + [headers, ...data].map(row => row.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${type}.csv`; a.click(); URL.revokeObjectURL(a.href);
-}
+function printProperty(x){ const rows=[['کد فایل', x.id.replace('P','')],['عنوان', x.title||x.type],['نوع معامله', x.deal],['نوع ملک', x.type]]; if(x.area) rows.push(['متراژ', x.area+' متر']); if(x.price) rows.push(['قیمت', money(x.price)]); if(x.address) rows.push(['آدرس', x.address]); if(x.phone) rows.push(['تلفن', x.phone]); const html=`<h1>🏠 ${appSettings.name}</h1><table>${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('')}</table>`; $('printArea').innerHTML=html; window.print(); }
+function exportCSV(type){ let data=[], headers=[]; if(type==='properties'){ headers=['کد','عنوان','نوع معامله','نوع ملک','متراژ','قیمت','آدرس','مالک','تلفن']; data=items.filter(x=>!x.isDeleted && x.archived!==true).map(x=>[x.id.replace('P',''), x.title||'', x.deal||'', x.type||'', x.area||'', x.price||'', x.address||'', x.owner||'', x.phone||'']); } else { headers=['نام','تلفن','نوع معامله','نوع ملک','متراژ','بودجه']; data=demands.filter(x=>!x.isDeleted).map(x=>[x.name||'', x.phone||'', x.deal||'', x.type||'', x.area||'', x.maxPrice||'']); } const csv = '\ufeff' + [headers, ...data].map(row => row.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'); const blob = new Blob([csv], {type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${type}.csv`; a.click(); URL.revokeObjectURL(a.href); }
 
 function openDemandDetail(id){
-  const x=demands.find(i=>i.id===id); if(!x) return;
-  $('ddTitle').textContent='درخواست: '+x.name;
+  const x=demands.find(i=>i.id===id); if(!x) return; $('ddTitle').textContent='درخواست: '+x.name;
   const rows=[['نام',esc(x.name),true],['تلفن',esc(x.phone),false],['نوع معامله',esc(x.deal),false],['نوع ملک',esc(x.type),false]];
   let html=rows.map(r=>`<div class="row"><span>${r[0]}</span><span class="${r[2]?'fa':''}">${r[1]}</span></div>`).join('');
-  $('ddContent').innerHTML=html;
-  $('ddCallBtn').onclick=()=>callPhone(x.phone||'');
-  $('ddEditBtn').onclick=()=>{$('demandDetail').close();editDemand(id)};
-  $('demandDetail').showModal();
+  $('ddContent').innerHTML=html; $('ddCallBtn').onclick=()=>callPhone(x.phone||''); $('ddEditBtn').onclick=()=>{$('demandDetail').close();editDemand(id)}; $('demandDetail').showModal();
 }
 
-function renderSlider(){
-  const box=$('dSlider'),dots=$('dDots');
-  if(!detailPhotos.length){box.innerHTML='<div class="slider-empty">📷 عکسی ثبت نشده</div>';dots.innerHTML='';return;}
-  const i=detailIndex;
-  box.innerHTML=`<div class="slider"><img src="${detailPhotos[i]}"><div class="slider-counter">${i+1} / ${detailPhotos.length}</div></div>`;
-}
+function renderSlider(){ const box=$('dSlider'),dots=$('dDots'); if(!detailPhotos.length){box.innerHTML='<div class="slider-empty">📷 عکسی ثبت نشده</div>';dots.innerHTML='';return;} const i=detailIndex; box.innerHTML=`<div class="slider"><img src="${detailPhotos[i]}"><div class="slider-counter">${i+1} / ${detailPhotos.length}</div></div>`; }
 
-function updateDealFields(){
-  const isRent=($('deal').value==='رهن و اجاره');
-  $('salePriceField').style.display=isRent?'none':'';
-  $('totalPriceField').style.display=isRent?'none':'';
-  $('depositField').style.display=isRent?'':'none';
-  $('rentField').style.display=isRent?'':'none';
-}
+function updateDealFields(){ const isRent=($('deal').value==='رهن و اجاره'); $('salePriceField').style.display=isRent?'none':''; $('totalPriceField').style.display=isRent?'none':''; $('depositField').style.display=isRent?'':'none'; $('rentField').style.display=isRent?'':'none'; }
 $('deal').addEventListener('change',updateDealFields);
 
-function handleVideoSelect(e){
-  let file=e.target.files[0]; if(!file) return;
-  if(file.size>50*1024*1024){alert('حجم ویدیو نباید بیشتر از 50MB باشد.');e.target.value='';return;}
-  let reader=new FileReader();
-  reader.onload=ev=>{currentVideoBase64=ev.target.result;$('videoPreview').src=currentVideoBase64;$('videoPreviewContainer').style.display='block';};
-  reader.readAsDataURL(file);
-}
+function handleVideoSelect(e){ let file=e.target.files[0]; if(!file) return; if(file.size>50*1024*1024){alert('حجم ویدیو زیاد است.');e.target.value='';return;} let reader=new FileReader(); reader.onload=ev=>{currentVideoBase64=ev.target.result;$('videoPreview').src=currentVideoBase64;$('videoPreviewContainer').style.display='block';}; reader.readAsDataURL(file); }
 function clearVideo(){currentVideoBase64=null;$('videoCamera').value='';$('videoGallery').value='';$('videoPreview').src='';$('videoPreviewContainer').style.display='none';}
 
-function openForm(){
-  $('propertyForm').reset();$('pid').value='';$('formTitle').textContent='ثبت فایل جدید';
-  $('photoPreview').innerHTML='';clearAudio();clearVideo();updateDealFields();$('form').showModal();
+function clearAudio() {
+    if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') { mediaRecorder.stop(); }
+    audioChunks = []; recordedAudioBase64 = null; isRecording = false;
+    if (document.getElementById('audioPreview')) { document.getElementById('audioPreview').src = ''; }
+    if (document.getElementById('audioContainer')) { document.getElementById('audioContainer').style.display = 'none'; }
+    if (document.getElementById('deleteAudioBtn')) { document.getElementById('deleteAudioBtn').style.display = 'none'; }
+    if (document.getElementById('recordBtn')) { document.getElementById('recordBtn').textContent = '🎤 شروع ضبط صدا'; document.getElementById('recordBtn').classList.remove('recording'); }
 }
 
-function edit(id){
-  const x=items.find(i=>i.id===id); if(!x) return;
-  openForm();$('formTitle').textContent='ویرایش فایل';$('pid').value=x.id;
-  ['deal','type','area','rooms','pricePerMeter','price','deposit','rent','floor','title','address','owner','phone','notes'].forEach(k=>$(k).value=x[k]||'');
-  updateDealFields();
-}
+function openForm(){ $('propertyForm').reset();$('pid').value='';$('formTitle').textContent='ثبت فایل جدید'; $('photoPreview').innerHTML='';clearAudio();clearVideo();updateDealFields();$('form').showModal(); }
+function edit(id){ const x=items.find(i=>i.id===id); if(!x) return; openForm();$('formTitle').textContent='ویرایش فایل';$('pid').value=x.id; ['deal','type','area','rooms','pricePerMeter','price','deposit','rent','floor','title','address','owner','phone','notes'].forEach(k=>$(k).value=x[k]||''); updateDealFields(); }
 
 function openDemandForm(){ $('demandForm').reset();$('did').value='';$('demandFormDialog').showModal(); }
-function editDemand(id){
-  const x=demands.find(i=>i.id===id); if(!x) return;
-  openDemandForm();$('did').value=x.id;
-  ['d_name','d_phone','d_deal','d_type','d_area','d_maxPrice','d_notes'].forEach(k=>$(k).value=x[k.replace('d_','')]||'');
-}
+function editDemand(id){ const x=demands.find(i=>i.id===id); if(!x) return; openDemandForm();$('did').value=x.id; ['d_name','d_phone','d_deal','d_type','d_area','d_maxPrice','d_notes'].forEach(k=>$(k).value=x[k.replace('d_','')]||''); }
 
 function openContactForm(){ $('contactForm').reset();$('cid').value='';$('contactFormDialog').showModal(); }
-function editContact(id){
-  const x=contacts.find(i=>i.id===id); if(!x) return;
-  openContactForm();$('cid').value=x.id;$('c_name').value=x.name||'';$('c_phone').value=x.phone||'';$('c_role').value=x.role||'سایر';
-}
-async function saveContact(e){
-  e.preventDefault();
-  const id=$('cid').value||('C'+Date.now().toString().slice(-8));
-  const x={id,name:$('c_name').value.trim(),phone:$('c_phone').value.trim(),role:$('c_role').value,notes:$('c_notes').value.trim(),updated:Date.now()};
-  await put('contacts',x);
-  const i=contacts.findIndex(z=>z.id===id); if(i<0) contacts.push(x); else contacts[i]=x;
-  $('contactFormDialog').close();render();
-}
+function editContact(id){ const x=contacts.find(i=>i.id===id); if(!x) return; openContactForm();$('cid').value=x.id;$('c_name').value=x.name||'';$('c_phone').value=x.phone||'';$('c_role').value=x.role||'سایر'; }
+async function saveContact(e){ e.preventDefault(); const id=$('cid').value||('C'+Date.now().toString().slice(-8)); const x={id,name:$('c_name').value.trim(),phone:$('c_phone').value.trim(),role:$('c_role').value,notes:$('c_notes').value.trim(),updated:Date.now()}; await put('contacts',x); const i=contacts.findIndex(z=>z.id===id); if(i<0) contacts.push(x); else contacts[i]=x; $('contactFormDialog').close();render(); }
 
 function compressImage(file,maxSize=800,quality=0.6){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
-    reader.onload=()=>{
-      const img=new Image();
-      img.onload=()=>{
-        let {width:w,height:h}=img;
-        if(w>maxSize||h>maxSize){ if(w>h){h=Math.round(h*maxSize/w);w=maxSize;} else{w=Math.round(w*maxSize/h);h=maxSize;} }
-        const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
-        canvas.getContext('2d').drawImage(img,0,0,w,h);
-        resolve(canvas.toDataURL('image/jpeg',quality));
-      };
-      img.onerror=reject;img.src=reader.result;
-    };
+    reader.onload=()=>{ const img=new Image(); img.onload=()=>{ let {width:w,height:h}=img; if(w>maxSize||h>maxSize){ if(w>h){h=Math.round(h*maxSize/w);w=maxSize;} else{w=Math.round(w*maxSize/h);h=maxSize;} } const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h; canvas.getContext('2d').drawImage(img,0,0,w,h); resolve(canvas.toDataURL('image/jpeg',quality)); }; img.onerror=reject;img.src=reader.result; };
     reader.onerror=reject;reader.readAsDataURL(file);
   });
 }
 
 async function saveProperty(e){
   e.preventDefault();
-  let id=$('pid').value || 'P'+Date.now().toString(36).toUpperCase();
-  let photos=[]; const files=$('photos').files;
-  if(files&&files.length){ for(const f of files){ photos.push(await compressImage(f)); } }
-  
-  const x={
-    id, photos, photo:photos[0]||'', videoData:currentVideoBase64, created:Date.now(), updated:Date.now(),
-    deal:$('deal').value, type:$('type').value, area:$('area').value, rooms:$('rooms').value, floor:$('floor').value,
-    title:$('title').value, address:$('address').value, owner:$('owner').value, phone:$('phone').value, notes:$('notes').value,
-    pricePerMeter:$('pricePerMeter').value.replace(/,/g,''), price:$('price').value.replace(/,/g,''), deposit:$('deposit').value.replace(/,/g,''), rent:$('rent').value.replace(/,/g,'')
-  };
-  await put('properties',x);
-  const i=items.findIndex(z=>z.id===id); if(i<0) items.push(x); else items[i]=x;
-  $('form').close(); render();
-}
+  const btn = e.target.querySelector('button[type="submit"]');
+  if(btn) { btn.textContent = 'در حال ذخیره...'; btn.disabled = true; }
 
-async function saveDemand(e){
-  e.preventDefault();
-  const id=$('did').value||('D'+Date.now().toString().slice(-8));
-  const x={id, updated:Date.now(), name:$('d_name').value, phone:$('d_phone').value, deal:$('d_deal').value, type:$('d_type').value, area:$('d_area').value, maxPrice:$('d_maxPrice').value.replace(/,/g,''), notes:$('d_notes').value};
-  await put('demands',x);
-  const i=demands.findIndex(z=>z.id===id); if(i<0) demands.push(x); else demands[i]=x;
-  $('demandFormDialog').close(); render();
+  try {
+      let id=$('pid').value || 'P'+Date.now().toString(36).toUpperCase();
+      let photos=[]; const files=$('photos').files;
+      if(files&&files.length){ for(const f of files){ photos.push(await compressImage(f)); } }
+      const x={ id, photos, photo:photos[0]||'', videoData:currentVideoBase64, created:Date.now(), updated:Date.now(), deal:$('deal').value, type:$('type').value, area:$('area').value, rooms:$('rooms').value, floor:$('floor').value, title:$('title').value, address:$('address').value, owner:$('owner').value, phone:$('phone').value, notes:$('notes').value, pricePerMeter:$('pricePerMeter').value.replace(/,/g,''), price:$('price').value.replace(/,/g,''), deposit:$('deposit').value.replace(/,/g,''), rent:$('rent').value.replace(/,/g,'') };
+      await put('properties',x); const i=items.findIndex(z=>z.id===id); if(i<0) items.push(x); else items[i]=x; $('form').close(); render();
+      alert('✅ ملک با موفقیت در فضای ابری ذخیره شد.');
+  } catch (err) {
+      console.error(err); alert('❌ خطا در ذخیره: ' + err.message);
+  } finally {
+      if(btn) { btn.textContent = 'ذخیره فایل ملک'; btn.disabled = false; }
+  }
 }
+async function saveDemand(e){ e.preventDefault(); const id=$('did').value||('D'+Date.now().toString().slice(-8)); const x={id, updated:Date.now(), name:$('d_name').value, phone:$('d_phone').value, deal:$('d_deal').value, type:$('d_type').value, area:$('d_area').value, maxPrice:$('d_maxPrice').value.replace(/,/g,''), notes:$('d_notes').value}; await put('demands',x); const i=demands.findIndex(z=>z.id===id); if(i<0) demands.push(x); else demands[i]=x; $('demandFormDialog').close(); render(); }
 
 function callPhone(p){if(!p) return alert('شماره‌ای ثبت نشده.');window.location.href='tel:'+String(p).replace(/[^\d+]/g,'');}
-
-function loadSettingsUI(){
-  $('headerTitle').textContent=appSettings.name;
-  $('set_name').value=appSettings.name;
-  $('set_phone').value=appSettings.phone;
-  $('set_address').value=appSettings.address;
-}
-function saveSettings(){
-  appSettings.name=$('set_name').value.trim()||'املاک سعید';
-  appSettings.phone=$('set_phone').value.trim();
-  appSettings.address=$('set_address').value.trim();
-  localStorage.setItem('appSettings',JSON.stringify(appSettings));
-  loadSettingsUI(); alert('ذخیره شد.');
-}
+function loadSettingsUI(){ $('headerTitle').textContent=appSettings.name; $('set_name').value=appSettings.name; $('set_phone').value=appSettings.phone; $('set_address').value=appSettings.address; }
+function saveSettings(){ appSettings.name=$('set_name').value.trim()||'املاک سعید'; appSettings.phone=$('set_phone').value.trim(); appSettings.address=$('set_address').value.trim(); localStorage.setItem('appSettings',JSON.stringify(appSettings)); loadSettingsUI(); alert('ذخیره شد.'); }
 function openSettings(){$('settingsDialog').showModal();}
 function exitApp(){ if(confirm('خارج می‌شوید؟')) window.close(); }
 function showHelp(){$('helpDialog').showModal();}
- function clearAudio() {
-    if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-    }
-    audioChunks = [];
-    recordedAudioBase64 = null;
-    if (document.getElementById('audioPreview')) {
-        document.getElementById('audioPreview').src = '';
-    }
-    if (document.getElementById('audioContainer')) {
-        document.getElementById('audioContainer').style.display = 'none';
-    }
-    if (document.getElementById('deleteAudioBtn')) {
-        document.getElementById('deleteAudioBtn').style.display = 'none';
-    }
-    isRecording = false;
-    if (document.getElementById('recordBtn')) {
-        document.getElementById('recordBtn').textContent = '🎤 شروع ضبط صدا';
-        document.getElementById('recordBtn').classList.remove('recording');
-    }
-}
+
 // شروع
-applyTheme();
-load();
+applyTheme(); load();
 </script>
 </body>
 </html>
