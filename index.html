@@ -961,7 +961,27 @@ function saveSettings(){
 function openSettings(){$('settingsDialog').showModal();}
 function exitApp(){ if(confirm('خارج می‌شوید؟')) window.close(); }
 function showHelp(){$('helpDialog').showModal();}
-
+ function clearAudio() {
+    if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+    }
+    audioChunks = [];
+    recordedAudioBase64 = null;
+    if (document.getElementById('audioPreview')) {
+        document.getElementById('audioPreview').src = '';
+    }
+    if (document.getElementById('audioContainer')) {
+        document.getElementById('audioContainer').style.display = 'none';
+    }
+    if (document.getElementById('deleteAudioBtn')) {
+        document.getElementById('deleteAudioBtn').style.display = 'none';
+    }
+    isRecording = false;
+    if (document.getElementById('recordBtn')) {
+        document.getElementById('recordBtn').textContent = '🎤 شروع ضبط صدا';
+        document.getElementById('recordBtn').classList.remove('recording');
+    }
+}
 // شروع
 applyTheme();
 load();
