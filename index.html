@@ -399,25 +399,23 @@ body.light .adv-toggle{background:#f6f9fc}
 </dialog>
 <div id="printArea"></div>
 
-<!-- ⚠️ کدهای Firebase (اینجا را با دقت پر کنید) ⚠️ -->
+<!-- ⚠️ کدهای Firebase (اطلاعات پروژه شما) ⚠️ -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <script>
-// ⚠️⚠️⚠️ توجه کنید: این خطوط را باید با اطلاعات فایربیس خودتان عوض کنید ⚠️⚠️⚠️
 const firebaseConfig = {
-  apiKey: "اینجا_API_KEY_خود_را_بگذارید",
-  authDomain: "اینجا_authDomain_خود_را_بگذارید",
-  projectId: "اینجا_projectId_خود_را_بگذارید",
-  storageBucket: "اینجا_storageBucket_خود_را_بگذارید",
-  messagingSenderId: "اینجا_messagingSenderId_خود_را_بگذارید",
-  appId: "اینجا_appId_خود_را_بگذارید"
+  apiKey: "AIzaSyAec0ZPEZjZ8Zxzg7YiG0HGAcIUiWziDCE",
+  authDomain: "saeed-amlak-site.firebaseapp.com",
+  projectId: "saeed-amlak-site",
+  storageBucket: "saeed-amlak-site.firebasestorage.app",
+  messagingSenderId: "390870746323",
+  appId: "1:390870746323:web:85117a7d096b5626164026"
 };
 
 let dbCloud = null;
 let isFirebaseReady = false;
 
-// تلاش برای اتصال به فایربیس (اگر کدها وارد نشده باشند، برنامه کرش نمی‌کند)
 try {
     if (!firebaseConfig.apiKey.includes("اینجا")) {
         if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
@@ -469,7 +467,7 @@ async function load(){
     loadSettingsUI();
   }catch(e){
     console.error(e);
-    alert("خطا در بارگذاری اطلاعات از دیتابیس. اینترنت خود را بررسی کنید.");
+    // alert("خطا در بارگذاری اطلاعات از دیتابیس. اینترنت خود را بررسی کنید.");
   }
 }
 
