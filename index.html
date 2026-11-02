@@ -272,15 +272,18 @@ body.light .adv-toggle{background:#f6f9fc}
       <label class="amenity-check"><input type="checkbox" id="am_balcony"> بالکن</label>
     </div>
     <label>توضیحات متنی</label><textarea id="notes"></textarea>
+    
     <label>افزودن ویدیو به فایل</label>
     <div class="video-btns">
-      <label class="video-btn-label" style="color:var(--green);border-color:var(--green);">📷 فیلمبرداری با دوربین<input id="videoCamera" type="file" accept="video/*" capture="environment" onchange="handleVideoSelect(event)"></label>
-      <label class="video-btn-label" style="color:var(--accent);border-color:var(--accent);">🖼️ انتخاب از گالری<input id="videoGallery" type="file" accept="video/*" onchange="handleVideoSelect(event)"></label>
+      <label class="video-btn-label" style="color:var(--green);border-color:var(--green);">📷 فیلمبرداری با دوربین<input id="videoCamera" type="file" accept="video/*" capture="environment" onchange="uploadVideoCloudinary(event)"></label>
+      <label class="video-btn-label" style="color:var(--accent);border-color:var(--accent);">🖼️ انتخاب از گالری<input id="videoGallery" type="file" accept="video/*" onchange="uploadVideoCloudinary(event)"></label>
     </div>
+    <div id="videoStatus" style="display:none;color:var(--coop);font-size:13px;margin-top:5px;font-weight:bold;">در حال آپلود ویدیو... (لطفاً صبر کنید)</div>
     <div id="videoPreviewContainer" style="display:none;margin-top:10px;">
       <video id="videoPreview" controls playsinline style="width:100%;border-radius:12px;max-height:200px;"></video>
       <button type="button" onclick="clearVideo()" style="margin-top:5px;width:100%;background:#e15b5b;color:white;">حذف ویدیو</button>
     </div>
+
     <label>توضیح صوتی (ویس)</label>
     <div class="record-box">
       <div id="audioContainer" style="display:none;"><audio id="audioPreview" controls style="width:100%"></audio></div>
@@ -399,7 +402,7 @@ body.light .adv-toggle{background:#f6f9fc}
 </dialog>
 <div id="printArea"></div>
 
-<!-- ⚠️ کدهای Firebase (اطلاعات پروژه شما) ⚠️ -->
+<!-- ⚠️ کدهای Firebase ⚠️ -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
@@ -411,6 +414,12 @@ const firebaseConfig = {
   storageBucket: "saeed-amlak-site.firebasestorage.app",
   messagingSenderId: "390870746323",
   appId: "1:390870746323:web:85117a7d096b5626164026"
+};
+
+// ⚠️ تنظیمات کلودینری (اطلاعات شما از قبل وارد شده است)
+const cloudinaryConfig = {
+  cloudName: "fwt9qnqc", 
+  uploadPreset: "amlak_video" 
 };
 
 let dbCloud = null;
@@ -433,10 +442,12 @@ let currentTheme = localStorage.getItem('theme') || 'dark';
 let items=[], demands=[], contacts=[];
 let dealFilter='همه', typeFilter='همه', archiveFilter='archive';
 let detailPhotos=[], detailIndex=0, currentTab='prop';
-let currentVideoBase64=null;
+let currentVideoUrl = ""; 
 const $=id=>document.getElementById(id);
-let mediaRecorder, audioChunks=[], recordedAudioBase64=null, isRecording=false;
-let isSpeaking=false;
+
+let mediaRecorder;
+let audioChunks = [];
+let recordedAudioBase64 = null;
 
 function applyTheme(){
   if(currentTheme === 'light') document.body.classList.add('light');
@@ -450,12 +461,7 @@ function toggleTheme(){
 }
 
 async function load(){
-  if (!isFirebaseReady) {
-      console.warn("Firebase config is missing. App will work in offline mode.");
-      render();
-      loadSettingsUI();
-      return;
-  }
+  if (!isFirebaseReady) { render(); loadSettingsUI(); return; }
   try{
     const pSnap = await dbCloud.collection('properties').get();
     items = pSnap.docs.map(doc => doc.data());
@@ -467,25 +473,15 @@ async function load(){
     loadSettingsUI();
   }catch(e){
     console.error(e);
-    // alert("خطا در بارگذاری اطلاعات از دیتابیس. اینترنت خود را بررسی کنید.");
   }
 }
 
 async function put(storeName, item){
   if (!isFirebaseReady) throw new Error("تنظیمات Firebase در کد وارد نشده است.");
   try {
-    // تایم‌اوت ۱۰ ثانیه‌ای برای جلوگیری از گیر کردن دکمه
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('زمان اتصال به سرور به پایان رسید. اینترنت یا تنظیمات Firebase را بررسی کنید.')), 10000)
-    );
-    await Promise.race([
-        dbCloud.collection(storeName).doc(item.id).set(item),
-        timeoutPromise
-    ]);
-  } catch(e) {
-    console.error("خطا در ذخیره: ", e);
-    throw e; // خطا را پرتاب می‌کنیم تا در saveProperty گرفته شود
-  }
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('زمان اتصال به سرور به پایان رسید.')), 15000));
+    await Promise.race([ dbCloud.collection(storeName).doc(item.id).set(item), timeoutPromise ]);
+  } catch(e) { throw e; }
 }
 
 async function delItem(storeName, id, force=false){
@@ -528,8 +524,7 @@ function switchTab(tab){
   else if(tab==='demand') f.textContent='＋ ثبت خواهان جدید';
   else if(tab==='contacts') f.textContent='＋ ثبت مخاطب جدید';
   f.style.display=(tab==='archive')?'none':'block';
-  $('search').value='';
-  render();
+  $('search').value=''; render();
 }
 function openCurrentForm(){ if(currentTab==='prop') openForm(); else if(currentTab==='demand') openDemandForm(); else if(currentTab==='contacts') openContactForm(); }
 function setDeal(b){dealFilter=b.dataset.deal;document.querySelectorAll('#dealTabs button').forEach(x=>x.classList.toggle('active',x===b));if(b.dataset.deal!=='⭐') isFavFilter=false;render()}
@@ -690,13 +685,15 @@ function openDetail(id){
   let html=rows.map(r=>`<div class="row"><span>${r[0]}</span><span class="${r[2]?'fa':''}">${r[1]}</span></div>`).join('');
   if(x.amenities?.length){html+=`<h3>امکانات</h3><div class="tags-list">`+x.amenities.map(a=>`<span class="tag">${esc(a)}</span>`).join('')+`</div>`;}
   if(x.notes) html+=`<h3>توضیحات</h3><div class="muted" style="white-space:pre-wrap">${esc(x.notes)}</div>`;
-  if(x.audio||x.videoData){ html+=`<h3>چندرسانه‌ای</h3>`; if(x.audio) html+=`<div style="margin-top:8px;"><audio controls src="${x.audio}" style="width:100%;height:40px;"></audio></div>`; if(x.videoData) html+=`<div style="margin-top:8px;"><video controls src="${x.videoData}" style="width:100%;border-radius:12px;max-height:250px;"></video></div>`; }
+  
+  if(x.audio || x.videoLink){ 
+      html+=`<h3>چندرسانه‌ای</h3>`; 
+      if(x.audio) html+=`<div style="margin-top:8px;"><audio controls src="${x.audio}" style="width:100%;height:40px;"></audio></div>`; 
+      if(x.videoLink) html+=`<div style="margin-top:8px;"><a href="${x.videoLink}" target="_blank" class="primary" style="display:block;text-align:center;padding:12px;border-radius:12px;text-decoration:none;">🎥 مشاهده ویدیو ملک</a></div>`; 
+  }
   if(matches.length){ html+=`<h3>🎯 خواهان‌های منطبق (${matches.length})</h3>`; html+=matches.map(d=>`<div class="muted" style="margin-bottom:5px;">👤 <b>${esc(d.name)}</b> - <a class="phone-link" onclick="callPhone('${esc(d.phone)}')">${esc(d.phone)}</a></div>`).join(''); }
   $('dContent').innerHTML=html; $('dSpeakBtn').textContent='🔊 خواندن'; $('dSpeakBtn').onclick=()=>toggleSpeech(x); $('dShareBtn').onclick=()=>shareProperty(x); $('dCallBtn').onclick=()=>callPhone(x.phone||''); $('dCallBtn').style.display=x.phone?'':'none'; $('dSaveContactBtn').onclick=()=>quickSaveContact(x.owner,x.phone,'مالک'); $('dEditBtn').onclick=()=>{$('detail').close();edit(id)}; $('detail').showModal();
 }
-
-function printProperty(x){ const rows=[['کد فایل', x.id.replace('P','')],['عنوان', x.title||x.type],['نوع معامله', x.deal],['نوع ملک', x.type]]; if(x.area) rows.push(['متراژ', x.area+' متر']); if(x.price) rows.push(['قیمت', money(x.price)]); if(x.address) rows.push(['آدرس', x.address]); if(x.phone) rows.push(['تلفن', x.phone]); const html=`<h1>🏠 ${appSettings.name}</h1><table>${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('')}</table>`; $('printArea').innerHTML=html; window.print(); }
-function exportCSV(type){ let data=[], headers=[]; if(type==='properties'){ headers=['کد','عنوان','نوع معامله','نوع ملک','متراژ','قیمت','آدرس','مالک','تلفن']; data=items.filter(x=>!x.isDeleted && x.archived!==true).map(x=>[x.id.replace('P',''), x.title||'', x.deal||'', x.type||'', x.area||'', x.price||'', x.address||'', x.owner||'', x.phone||'']); } else { headers=['نام','تلفن','نوع معامله','نوع ملک','متراژ','بودجه']; data=demands.filter(x=>!x.isDeleted).map(x=>[x.name||'', x.phone||'', x.deal||'', x.type||'', x.area||'', x.maxPrice||'']); } const csv = '\ufeff' + [headers, ...data].map(row => row.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n'); const blob = new Blob([csv], {type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${type}.csv`; a.click(); URL.revokeObjectURL(a.href); }
 
 function openDemandDetail(id){
   const x=demands.find(i=>i.id===id); if(!x) return; $('ddTitle').textContent='درخواست: '+x.name;
@@ -710,24 +707,68 @@ function renderSlider(){ const box=$('dSlider'),dots=$('dDots'); if(!detailPhoto
 function updateDealFields(){ const isRent=($('deal').value==='رهن و اجاره'); $('salePriceField').style.display=isRent?'none':''; $('totalPriceField').style.display=isRent?'none':''; $('depositField').style.display=isRent?'':'none'; $('rentField').style.display=isRent?'':'none'; }
 $('deal').addEventListener('change',updateDealFields);
 
-function handleVideoSelect(e){ let file=e.target.files[0]; if(!file) return; 
-  // محدودیت حجم برای جلوگیری از خطای دیتابیس
-  if(file.size>1024*1024){alert('حجم ویدیو نباید بیشتر از ۱ مگابایت باشد تا در دیتابیس ذخیره شود.');e.target.value='';return;} 
-  let reader=new FileReader(); reader.onload=ev=>{currentVideoBase64=ev.target.result;$('videoPreview').src=currentVideoBase64;$('videoPreviewContainer').style.display='block';}; reader.readAsDataURL(file); 
+async function uploadVideoCloudinary(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    if(cloudinaryConfig.cloudName.includes("YOUR_")) {
+        alert("⚠️ لطفاً ابتدا تنظیمات Cloudinary را در کدهای خود (بالای فایل) وارد کنید.");
+        return;
+    }
+
+    $('videoStatus').style.display = 'block';
+    $('videoPreviewContainer').style.display = 'none';
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', cloudinaryConfig.uploadPreset);
+
+    try {
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/video/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        
+        if(data.secure_url) {
+            currentVideoUrl = data.secure_url;
+            $('videoPreview').src = currentVideoUrl;
+            $('videoPreviewContainer').style.display = 'block';
+            $('videoStatus').textContent = '✅ ویدیو با موفقیت آپلود شد.';
+            setTimeout(() => { $('videoStatus').style.display = 'none'; }, 3000);
+        } else {
+            alert("خطا در آپلود ویدیو: " + (data.error?.message || 'خطای ناشناخته'));
+            $('videoStatus').style.display = 'none';
+        }
+    } catch (error) {
+        console.error(error);
+        alert("خطای شبکه در آپلود ویدیو.");
+        $('videoStatus').style.display = 'none';
+    }
 }
-function clearVideo(){currentVideoBase64=null;$('videoCamera').value='';$('videoGallery').value='';$('videoPreview').src='';$('videoPreviewContainer').style.display='none';}
+
+function clearVideo(){
+    currentVideoUrl="";
+    $('videoCamera').value='';
+    $('videoGallery').value='';
+    $('videoPreview').src='';
+    $('videoPreviewContainer').style.display='none';
+}
 
 function clearAudio() {
-    if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') { mediaRecorder.stop(); }
-    audioChunks = []; recordedAudioBase64 = null; isRecording = false;
-    if (document.getElementById('audioPreview')) { document.getElementById('audioPreview').src = ''; }
-    if (document.getElementById('audioContainer')) { document.getElementById('audioContainer').style.display = 'none'; }
-    if (document.getElementById('deleteAudioBtn')) { document.getElementById('deleteAudioBtn').style.display = 'none'; }
-    if (document.getElementById('recordBtn')) { document.getElementById('recordBtn').textContent = '🎤 شروع ضبط صدا'; document.getElementById('recordBtn').classList.remove('recording'); }
+    if (mediaRecorder && mediaRecorder.state === 'recording') { mediaRecorder.stop(); }
+    audioChunks = []; recordedAudioBase64 = null;
+    if ($('audioPreview')) { $('audioPreview').src = ''; }
+    if ($('audioContainer')) { $('audioContainer').style.display = 'none'; }
+    if ($('deleteAudioBtn')) { $('deleteAudioBtn').style.display = 'none'; }
+    if ($('recordBtn')) { $('recordBtn').textContent = '🎤 شروع ضبط صدا'; $('recordBtn').classList.remove('recording'); }
 }
 
 function openForm(){ $('propertyForm').reset();$('pid').value='';$('formTitle').textContent='ثبت فایل جدید'; $('photoPreview').innerHTML='';clearAudio();clearVideo();updateDealFields();$('form').showModal(); }
-function edit(id){ const x=items.find(i=>i.id===id); if(!x) return; openForm();$('formTitle').textContent='ویرایش فایل';$('pid').value=x.id; ['deal','type','area','rooms','pricePerMeter','price','deposit','rent','floor','title','address','owner','phone','notes'].forEach(k=>$(k).value=x[k]||''); updateDealFields(); }
+function edit(id){ const x=items.find(i=>i.id===id); if(!x) return; openForm();$('formTitle').textContent='ویرایش فایل';$('pid').value=x.id; ['deal','type','area','rooms','pricePerMeter','price','deposit','rent','floor','title','address','owner','phone','notes'].forEach(k=>$(k).value=x[k]||''); 
+    if(x.videoLink){ currentVideoUrl = x.videoLink; $('videoPreview').src = x.videoLink; $('videoPreviewContainer').style.display = 'block'; }
+    updateDealFields(); 
+}
 
 function openDemandForm(){ $('demandForm').reset();$('did').value='';$('demandFormDialog').showModal(); }
 function editDemand(id){ const x=demands.find(i=>i.id===id); if(!x) return; openDemandForm();$('did').value=x.id; ['d_name','d_phone','d_deal','d_type','d_area','d_maxPrice','d_notes'].forEach(k=>$(k).value=x[k.replace('d_','')]||''); }
@@ -749,35 +790,34 @@ async function saveProperty(e){
   const btn = e.target.querySelector('button[type="submit"]');
   const originalText = btn.innerText;
 
-  if(!isFirebaseReady) {
-      return alert('❌ لطفاً ابتدا تنظیمات Firebase را در کدهای خود (بالای فایل) وارد کنید.');
-  }
+  if(!isFirebaseReady) return alert('❌ لطفاً ابتدا تنظیمات Firebase را وارد کنید.');
 
-  if(btn) { btn.textContent = 'در حال ذخیره...'; btn.disabled = true; }
+  btn.textContent = 'در حال ذخیره...'; btn.disabled = true;
 
   try {
       let id=$('pid').value || 'P'+Date.now().toString(36).toUpperCase();
       let photos=[]; const files=$('photos').files;
       if(files&&files.length){ 
           for(const f of files){ 
-              try {
-                  photos.push(await compressImage(f)); 
-              } catch(imgErr) {
-                  console.warn("عکس فشرده نشد", imgErr);
-              }
+              try { photos.push(await compressImage(f)); } catch(err) {}
           } 
       }
       
-      const x={ id, photos, photo:photos[0]||'', videoData:currentVideoBase64, created:Date.now(), updated:Date.now(), deal:$('deal').value, type:$('type').value, area:$('area').value, rooms:$('rooms').value, floor:$('floor').value, title:$('title').value, address:$('address').value, owner:$('owner').value, phone:$('phone').value, notes:$('notes').value, pricePerMeter:$('pricePerMeter').value.replace(/,/g,''), price:$('price').value.replace(/,/g,''), deposit:$('deposit').value.replace(/,/g,''), rent:$('rent').value.replace(/,/g,'') };
+      const x={ 
+          id, photos, photo:photos[0]||'', 
+          videoLink: currentVideoUrl,
+          audio: recordedAudioBase64, 
+          created:Date.now(), updated:Date.now(), deal:$('deal').value, type:$('type').value, area:$('area').value, rooms:$('rooms').value, floor:$('floor').value, title:$('title').value, address:$('address').value, owner:$('owner').value, phone:$('phone').value, notes:$('notes').value, pricePerMeter:$('pricePerMeter').value.replace(/,/g,''), price:$('price').value.replace(/,/g,''), deposit:$('deposit').value.replace(/,/g,''), rent:$('rent').value.replace(/,/g,'') 
+      };
       
       await put('properties',x); 
       const i=items.findIndex(z=>z.id===id); if(i<0) items.push(x); else items[i]=x; 
       $('form').close(); render();
-      alert('✅ ملک با موفقیت در فضای ابری ذخیره شد.');
+      alert('✅ ملک با موفقیت ذخیره شد.');
   } catch (err) {
       console.error(err); alert('❌ خطا در ذخیره: \n' + err.message);
   } finally {
-      if(btn) { btn.textContent = originalText; btn.disabled = false; }
+      btn.textContent = originalText; btn.disabled = false;
   }
 }
 async function saveDemand(e){ e.preventDefault(); if(!isFirebaseReady) return alert('ابتدا تنظیمات Firebase را وارد کنید.'); const btn=e.target.querySelector('button[type="submit"]'); const oldText=btn.innerText; btn.innerText='در حال ذخیره...'; btn.disabled=true; try{ const id=$('did').value||('D'+Date.now().toString().slice(-8)); const x={id, updated:Date.now(), name:$('d_name').value, phone:$('d_phone').value, deal:$('d_deal').value, type:$('d_type').value, area:$('d_area').value, maxPrice:$('d_maxPrice').value.replace(/,/g,''), notes:$('d_notes').value}; await put('demands',x); const i=demands.findIndex(z=>z.id===id); if(i<0) demands.push(x); else demands[i]=x; $('demandFormDialog').close(); render(); } catch(err){ alert(err.message); } finally { btn.innerText=oldText; btn.disabled=false; } }
@@ -788,6 +828,44 @@ function saveSettings(){ appSettings.name=$('set_name').value.trim()||'املا�
 function openSettings(){$('settingsDialog').showModal();}
 function exitApp(){ if(confirm('خارج می‌شوید؟')) window.close(); }
 function showHelp(){$('helpDialog').showModal();}
+
+// ⚙️ راه اندازی ضبط صدا
+$('recordBtn').addEventListener('click', async () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        $('recordBtn').textContent = '🎤 شروع ضبط صدا';
+        $('recordBtn').classList.remove('recording');
+    } else {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.start();
+            audioChunks = [];
+            $('recordBtn').textContent = '⏹ توقف ضبط';
+            $('recordBtn').classList.add('recording');
+            $('audioContainer').style.display = 'none';
+
+            mediaRecorder.addEventListener('dataavailable', event => {
+                audioChunks.push(event.data);
+            });
+
+            mediaRecorder.addEventListener('stop', () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const reader = new FileReader();
+                reader.readAsDataURL(audioBlob);
+                reader.onloadend = () => {
+                    recordedAudioBase64 = reader.result;
+                    $('audioPreview').src = recordedAudioBase64;
+                    $('audioContainer').style.display = 'block';
+                    $('deleteAudioBtn').style.display = 'block';
+                };
+                stream.getTracks().forEach(track => track.stop());
+            });
+        } catch (err) {
+            alert('دسترسی به میکروفون داده نشد. لطفاً اجازه دسترسی را در مرورگر خود فعال کنید.');
+        }
+    }
+});
 
 // شروع
 applyTheme(); load();
