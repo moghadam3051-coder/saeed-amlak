@@ -404,6 +404,7 @@ body.light .adv-toggle{background:#f6f9fc}
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
 <script>
+// ⚠️⚠️⚠️ توجه کنید: این خطوط را باید با اطلاعات فایربیس خودتان عوض کنید ⚠️⚠️⚠️
 const firebaseConfig = {
   apiKey: "اینجا_API_KEY_خود_را_بگذارید",
   authDomain: "اینجا_authDomain_خود_را_بگذارید",
@@ -413,8 +414,19 @@ const firebaseConfig = {
   appId: "اینجا_appId_خود_را_بگذارید"
 };
 
-if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
-const dbCloud = firebase.firestore();
+let dbCloud = null;
+let isFirebaseReady = false;
+
+// تلاش برای اتصال به فایربیس (اگر کدها وارد نشده باشند، برنامه کرش نمی‌کند)
+try {
+    if (!firebaseConfig.apiKey.includes("اینجا")) {
+        if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+        dbCloud = firebase.firestore();
+        isFirebaseReady = true;
+    }
+} catch(e) {
+    console.error("Firebase Init Error:", e);
+}
 
 let appSettings = JSON.parse(localStorage.getItem('appSettings')) || { name: "املاک سعید", phone: "09141182129", address: "تبریز، شهرک اندیشه" };
 let favorites = JSON.parse(localStorage.getItem('favorites')) || [];
@@ -440,6 +452,12 @@ function toggleTheme(){
 }
 
 async function load(){
+  if (!isFirebaseReady) {
+      console.warn("Firebase config is missing. App will work in offline mode.");
+      render();
+      loadSettingsUI();
+      return;
+  }
   try{
     const pSnap = await dbCloud.collection('properties').get();
     items = pSnap.docs.map(doc => doc.data());
@@ -451,19 +469,29 @@ async function load(){
     loadSettingsUI();
   }catch(e){
     console.error(e);
+    alert("خطا در بارگذاری اطلاعات از دیتابیس. اینترنت خود را بررسی کنید.");
   }
 }
 
 async function put(storeName, item){
+  if (!isFirebaseReady) throw new Error("تنظیمات Firebase در کد وارد نشده است.");
   try {
-    await dbCloud.collection(storeName).doc(item.id).set(item);
+    // تایم‌اوت ۱۰ ثانیه‌ای برای جلوگیری از گیر کردن دکمه
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('زمان اتصال به سرور به پایان رسید. اینترنت یا تنظیمات Firebase را بررسی کنید.')), 10000)
+    );
+    await Promise.race([
+        dbCloud.collection(storeName).doc(item.id).set(item),
+        timeoutPromise
+    ]);
   } catch(e) {
     console.error("خطا در ذخیره: ", e);
-    alert("خطا در ذخیره در فضای ابری!");
+    throw e; // خطا را پرتاب می‌کنیم تا در saveProperty گرفته شود
   }
 }
 
 async function delItem(storeName, id, force=false){
+  if (!isFirebaseReady) return alert("Firebase تنظیم نشده است.");
   if(force) {
     if(!confirm('آیا از حذف همیشگی اطمینان دارید؟')) return;
     try {
@@ -684,7 +712,11 @@ function renderSlider(){ const box=$('dSlider'),dots=$('dDots'); if(!detailPhoto
 function updateDealFields(){ const isRent=($('deal').value==='رهن و اجاره'); $('salePriceField').style.display=isRent?'none':''; $('totalPriceField').style.display=isRent?'none':''; $('depositField').style.display=isRent?'':'none'; $('rentField').style.display=isRent?'':'none'; }
 $('deal').addEventListener('change',updateDealFields);
 
-function handleVideoSelect(e){ let file=e.target.files[0]; if(!file) return; if(file.size>50*1024*1024){alert('حجم ویدیو زیاد است.');e.target.value='';return;} let reader=new FileReader(); reader.onload=ev=>{currentVideoBase64=ev.target.result;$('videoPreview').src=currentVideoBase64;$('videoPreviewContainer').style.display='block';}; reader.readAsDataURL(file); }
+function handleVideoSelect(e){ let file=e.target.files[0]; if(!file) return; 
+  // محدودیت حجم برای جلوگیری از خطای دیتابیس
+  if(file.size>1024*1024){alert('حجم ویدیو نباید بیشتر از ۱ مگابایت باشد تا در دیتابیس ذخیره شود.');e.target.value='';return;} 
+  let reader=new FileReader(); reader.onload=ev=>{currentVideoBase64=ev.target.result;$('videoPreview').src=currentVideoBase64;$('videoPreviewContainer').style.display='block';}; reader.readAsDataURL(file); 
+}
 function clearVideo(){currentVideoBase64=null;$('videoCamera').value='';$('videoGallery').value='';$('videoPreview').src='';$('videoPreviewContainer').style.display='none';}
 
 function clearAudio() {
@@ -704,7 +736,7 @@ function editDemand(id){ const x=demands.find(i=>i.id===id); if(!x) return; open
 
 function openContactForm(){ $('contactForm').reset();$('cid').value='';$('contactFormDialog').showModal(); }
 function editContact(id){ const x=contacts.find(i=>i.id===id); if(!x) return; openContactForm();$('cid').value=x.id;$('c_name').value=x.name||'';$('c_phone').value=x.phone||'';$('c_role').value=x.role||'سایر'; }
-async function saveContact(e){ e.preventDefault(); const id=$('cid').value||('C'+Date.now().toString().slice(-8)); const x={id,name:$('c_name').value.trim(),phone:$('c_phone').value.trim(),role:$('c_role').value,notes:$('c_notes').value.trim(),updated:Date.now()}; await put('contacts',x); const i=contacts.findIndex(z=>z.id===id); if(i<0) contacts.push(x); else contacts[i]=x; $('contactFormDialog').close();render(); }
+async function saveContact(e){ e.preventDefault(); if(!isFirebaseReady) return alert('ابتدا تنظیمات Firebase را وارد کنید.'); const id=$('cid').value||('C'+Date.now().toString().slice(-8)); const x={id,name:$('c_name').value.trim(),phone:$('c_phone').value.trim(),role:$('c_role').value,notes:$('c_notes').value.trim(),updated:Date.now()}; await put('contacts',x); const i=contacts.findIndex(z=>z.id===id); if(i<0) contacts.push(x); else contacts[i]=x; $('contactFormDialog').close();render(); }
 
 function compressImage(file,maxSize=800,quality=0.6){
   return new Promise((resolve,reject)=>{
@@ -717,22 +749,40 @@ function compressImage(file,maxSize=800,quality=0.6){
 async function saveProperty(e){
   e.preventDefault();
   const btn = e.target.querySelector('button[type="submit"]');
+  const originalText = btn.innerText;
+
+  if(!isFirebaseReady) {
+      return alert('❌ لطفاً ابتدا تنظیمات Firebase را در کدهای خود (بالای فایل) وارد کنید.');
+  }
+
   if(btn) { btn.textContent = 'در حال ذخیره...'; btn.disabled = true; }
 
   try {
       let id=$('pid').value || 'P'+Date.now().toString(36).toUpperCase();
       let photos=[]; const files=$('photos').files;
-      if(files&&files.length){ for(const f of files){ photos.push(await compressImage(f)); } }
+      if(files&&files.length){ 
+          for(const f of files){ 
+              try {
+                  photos.push(await compressImage(f)); 
+              } catch(imgErr) {
+                  console.warn("عکس فشرده نشد", imgErr);
+              }
+          } 
+      }
+      
       const x={ id, photos, photo:photos[0]||'', videoData:currentVideoBase64, created:Date.now(), updated:Date.now(), deal:$('deal').value, type:$('type').value, area:$('area').value, rooms:$('rooms').value, floor:$('floor').value, title:$('title').value, address:$('address').value, owner:$('owner').value, phone:$('phone').value, notes:$('notes').value, pricePerMeter:$('pricePerMeter').value.replace(/,/g,''), price:$('price').value.replace(/,/g,''), deposit:$('deposit').value.replace(/,/g,''), rent:$('rent').value.replace(/,/g,'') };
-      await put('properties',x); const i=items.findIndex(z=>z.id===id); if(i<0) items.push(x); else items[i]=x; $('form').close(); render();
+      
+      await put('properties',x); 
+      const i=items.findIndex(z=>z.id===id); if(i<0) items.push(x); else items[i]=x; 
+      $('form').close(); render();
       alert('✅ ملک با موفقیت در فضای ابری ذخیره شد.');
   } catch (err) {
-      console.error(err); alert('❌ خطا در ذخیره: ' + err.message);
+      console.error(err); alert('❌ خطا در ذخیره: \n' + err.message);
   } finally {
-      if(btn) { btn.textContent = 'ذخیره فایل ملک'; btn.disabled = false; }
+      if(btn) { btn.textContent = originalText; btn.disabled = false; }
   }
 }
-async function saveDemand(e){ e.preventDefault(); const id=$('did').value||('D'+Date.now().toString().slice(-8)); const x={id, updated:Date.now(), name:$('d_name').value, phone:$('d_phone').value, deal:$('d_deal').value, type:$('d_type').value, area:$('d_area').value, maxPrice:$('d_maxPrice').value.replace(/,/g,''), notes:$('d_notes').value}; await put('demands',x); const i=demands.findIndex(z=>z.id===id); if(i<0) demands.push(x); else demands[i]=x; $('demandFormDialog').close(); render(); }
+async function saveDemand(e){ e.preventDefault(); if(!isFirebaseReady) return alert('ابتدا تنظیمات Firebase را وارد کنید.'); const btn=e.target.querySelector('button[type="submit"]'); const oldText=btn.innerText; btn.innerText='در حال ذخیره...'; btn.disabled=true; try{ const id=$('did').value||('D'+Date.now().toString().slice(-8)); const x={id, updated:Date.now(), name:$('d_name').value, phone:$('d_phone').value, deal:$('d_deal').value, type:$('d_type').value, area:$('d_area').value, maxPrice:$('d_maxPrice').value.replace(/,/g,''), notes:$('d_notes').value}; await put('demands',x); const i=demands.findIndex(z=>z.id===id); if(i<0) demands.push(x); else demands[i]=x; $('demandFormDialog').close(); render(); } catch(err){ alert(err.message); } finally { btn.innerText=oldText; btn.disabled=false; } }
 
 function callPhone(p){if(!p) return alert('شماره‌ای ثبت نشده.');window.location.href='tel:'+String(p).replace(/[^\d+]/g,'');}
 function loadSettingsUI(){ $('headerTitle').textContent=appSettings.name; $('set_name').value=appSettings.name; $('set_phone').value=appSettings.phone; $('set_address').value=appSettings.address; }
