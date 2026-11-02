@@ -1,0 +1,23 @@
+{
+  "name": "املاک سعید",
+  "short_name": "املاک سعید",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b172a",
+  "theme_color": "#10213b",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/263/263115.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/263/263115.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
